@@ -1,108 +1,126 @@
-function addStickyNote(quadrantId) {
-    const note = document.createElement('div');
-    note.classList.add('sticky-note');
-    note.contentEditable = true;
-    note.innerText = "New Note";
-
-    note.style.position = 'absolute';
-    note.style.top = `${Math.random() * 80}%`;
-    note.style.left = `${Math.random() * 80}%`;
-
-// Allow dragging
-    note.onmousedown = function (event) {
-        let shiftX = event.clientX - note.getBoundingClientRect().left;
-        let shiftY = event.clientY - note.getBoundingClientRect().top;
-
-        function moveAt(pageX, pageY) {
-            note.style.left = pageX - shiftX +'px';
-            note.style.top = pageY - shiftY + 'px';
-        }
-
-        function onMouseMove(event) {
-            moveAt(event.pageX, event.pageY);
-        }
-
-        document.addEventListener('mousemove', onMouseMove);
-
-        note.onmouseup = function () {
-            document.removeEventListener('mousemove', onMouseMove);
-            note.onmouseup = null;
-        };
-    };
-
-    note.ondragstart= function () {
-    return false;
-    };
-
-    document.getElementById(quadrantId).appendChild(note);
+function popup() {
+    const popupContainer = document.createElement("div");
+    popupContainer.innerHTML=`
+    <div id="popupContainer">
+        <h1>New Note</h1>
+        <textarea id="note-text" placeholder="Enter your note..."></textarea>
+        <div id="btn-container">
+            <button id="submitBtn" onclick="createNote()">Create Note</button>
+            <button id="closeBtn" onclick="closePopup()">Close</button>
+        </div>
+    </div>
+    `;
+    document.body.appendChild(popupContainer);
 }
 
-document.addEventListener('DOMContentLoaded', loadNotes);
-
-function saveNotesState(){
-    const quadrants = document.querySelectorAll('.quadrant');
-    const notesData = [];
-
-    quadrants.forEach(quadrant => {
-        const notes = quadrant.querySelectorAll('.sticky-note');
-        notes.forEach(note=> {
-            notesData.push({
-                quadrantId: quadrant.id,
-                content: note.innerText,
-                position: {
-                    top: note.style.top,
-                    left: note.style.left
-                }
-            });
-        });
-    });
-
-    localStorage.setItem('notes', JSON.stringify(notesData));
-}
-
-function loadNotes() {
-    const savedNotes = JSON.parse(localStorage.getItem('notes'));
-    if (savedNotes) {
-        savedNotes.forEach(noteData =>{
-            const note = document.createElement('div');
-            note.classList.add('sticky-note');
-            note.contentEditable = true;
-            note.innerText = noteData.content;
-
-            note.style.position = 'absolute';
-            note.style.top = noteData.position.top;
-            note.style.left = noteData.position.left;
-            
-            //allow dragging
-            note.onmousedown = function (event) {
-                let shiftX = event.clientX - note.getBoundingClientRect().left;
-                let shiftY = event.clientY - note.getBoundingClientRect().top;
-
-                function moveAt(pageX, pageY) {
-                    note.style.left = pageX-shiftX +'px';
-                    note.style.top = pageY-shiftY +'px';
-                }
-                
-                function onMouseMove(event){
-                    moveAt(event.pageX, event.pageY);
-                }
-
-                document.addEventListener('mousemove', onMouseMove);
-
-                note.onmouseup = function(){
-                    document.removeEventListener('mousemove', onMouseMove);
-                    note.onmouseup = null;
-                    saveNotesState();
-                };
-
-            };
-
-        note.ondragstart = function () {
-            return false;
-        };
-        
-
-        document.getElementById(noteData.quadrantID).appendChild(note);
-        });
+//check's if popup container exists, deletes if it does
+function closePopup(){
+    const popupContainer = document.getElementById("popupContainer");
+    if(popupContainer){
+        popupContainer.remove();
     }
 }
+
+function createNote(){
+    const popupContainer = document.getElementById('popupContainer');
+    const noteText = document.getElementById('note-text').value;
+    //if note has something inside of it, will save it by timecode
+    if (noteText.trim() !== ''){
+        const note = {
+        id: new Date().getTime(),
+        text: noteText
+        };
+        
+        const existingNotes = JSON.parse(localStorage.getItem('notes')) || [];
+        existingNotes.push(note);
+
+        localStorage.setItem('notes', JSON.stringify(existingNotes));
+
+        document.getElementById('note-text').value = '';
+
+        popupContainer.remove();
+        displayNotes();
+    }
+}
+
+function displayNotes() {
+    const notesList = document.getElementById('notes-list');
+    notesList.innerHTML = '';
+
+    const notes = JSON.parse(localStorage.getItem('notes')) || [];
+    notes.forEach(note => {
+        const listItem = document.createElement('li');
+        listItem.innerHTML = `
+        <span>${note.text}</span>
+        <div id="noteBtns-container">
+            <button id="editBtn" onclick="editNote(${note.id})"><i class="fa-solid fa-pen"></i></button>
+             <button id="deleteBtn" onclick="deleteNote(${note.id})"><i class="fa-solid fa-trash"></i></button>
+        </div>
+        `;
+        notesList.appendChild(listItem);
+    });
+}
+
+function editNote(noteId){
+    const notes = JSON.parse(localStorage.getItem('notes')) || [];
+    const noteToEdit = notes.find(note => note.id == noteId);
+    const noteText = noteToEdit ? noteToEdit.text : '';
+    const editingPopup = document.createElement("div");
+
+    editingPopup.innerHTML = `
+    <div id="editing-container" data-note-id="${noteId}">
+        <h1>Edit Note</h1>
+        <textarea id="note-text">${noteText}</textarea>
+        <div id="btn-container">
+            <button id="submitBtn" onclick="updateNote()">Done</button>
+            <button id="closeBtn" onclick="closeEditPopup()">Cancel</button>
+        </div>
+    </div>
+    `;
+    document.body.appendChild(editingPopup);
+}
+
+function closeEditPopup() {
+    const editingPopup = document.getElementById("editing-container");
+
+    if (editingPopup) {
+        editingPopup.remove();
+    }
+}
+
+function updateNote() {
+    const noteText = document.getElementById('note-text').value.trim();
+    const editingPopup = document.getElementById('editing-container');
+
+    if (noteText !== '') {
+        const noteId = editingPopup.getAttribute('data-note-id');
+        let notes = JSON.parse(localStorage.getItem('notes')) || [];
+
+        //find the notes to update
+        const updatedNotes = notes.map(note => {
+            if (note.id ==noteId) {
+                return { id: note.id, text: noteText };
+            }
+            return note;
+        });
+
+        //update the notes in local storage
+        localStorage.setItem('notes', JSON.stringify(updatedNotes));
+
+        //close the editing popup
+        editingPopup.remove();
+
+        //refresh the displayed notes
+        displayNotes();
+    }
+}
+
+function deleteNote(noteId){
+    let notes = JSON.parse(localStorage.getItem('notes')) || [];
+    notes = notes.filter(note => note.id !== noteId);
+
+    localStorage.setItem('notes', JSON.stringify(notes));
+    displayNotes();
+}
+
+displayNotes();
